@@ -25,6 +25,10 @@ body {
   font-family: inherit;
 }
 
+:root[data-theme='light'] .leaflet-container {
+  background: #f4f4f1;
+}
+
 .leaflet-control-attribution {
   background: rgba(0, 0, 0, 0.75) !important;
   color: rgba(255, 255, 255, 0.85) !important;
@@ -33,8 +37,18 @@ body {
   -webkit-backdrop-filter: blur(12px);
 }
 
+:root[data-theme='light'] .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.85) !important;
+  color: rgba(0, 0, 0, 0.78) !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+}
+
 .leaflet-control-attribution a {
   color: #fff !important;
+}
+
+:root[data-theme='light'] .leaflet-control-attribution a {
+  color: #111 !important;
 }
 
 .line-clamp-3 {

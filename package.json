@@ -5,14 +5,21 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "start": "vite",
+    "start": "vite preview --port 4173",
     "build": "vite build",
-    "preview": "vite preview"
+    "vercel-build": "node vercel-build.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
+  "vercel": {
+    "buildCommand": "npm run vercel-build",
+    "outputDirectory": "dist",
+    "rewrites": [
+      { "source": "/(.*)", "destination": "/index.html" }
+    ]
+  },
   "dependencies": {
     "leaflet": "^1.9.4",
     "lucide-react": "^1.8.0",

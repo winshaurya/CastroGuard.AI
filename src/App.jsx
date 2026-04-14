@@ -202,7 +202,11 @@ const AGENTS = ALL_PROVIDER_BLUEPRINTS.map((provider, index) => ({
 
 export default function App() {
   const [view, setView] = useState('input');
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'dark';
+    const storedTheme = window.localStorage.getItem('congni-theme');
+    return storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : 'dark';
+  });
   const [polygonPoints, setPolygonPoints] = useState([]);
   const [assetDetails, setAssetDetails] = useState('');
   const [assetValue, setAssetValue] = useState('');
@@ -228,15 +232,6 @@ export default function App() {
   const isLightMode = theme === 'light';
   const shapeGridBorderColor = isLightMode ? 'rgba(0, 0, 0, 0.18)' : 'rgba(255, 255, 255, 0.18)';
   const shapeGridHoverFill = '#868484';
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-
-    const storedTheme = window.localStorage.getItem('congni-theme');
-    if (storedTheme === 'light' || storedTheme === 'dark') {
-      setTheme(storedTheme);
-    }
-  }, []);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -1062,7 +1057,7 @@ export default function App() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
-      <div className="relative min-h-screen w-full overflow-hidden text-[var(--app-fg)] selection:bg-white/30 selection:text-white">
+      <div className="relative min-h-screen w-full overflow-hidden text-(--app-fg) selection:bg-white/30 selection:text-white">
         <ShapeGrid
           theme={theme}
           direction="diagonal"
@@ -1074,7 +1069,7 @@ export default function App() {
           hoverTrailAmount={0}
           className="pointer-events-none absolute inset-0 opacity-20 sm:opacity-30"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/20 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-linear-to-b from-black/5 via-transparent to-black/20 pointer-events-none"></div>
         <div className="relative z-10">
           {view === 'input' && renderInput()}
           {view === 'processing' && renderProcessing()}
