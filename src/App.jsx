@@ -730,7 +730,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="space-y-2 max-h-[34vh] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[28vh] overflow-y-auto pr-1 sm:max-h-[34vh]">
             {PROCESS_STAGES.map((stage, index) => {
               const stageState = index < activeAgentIndex ? 'complete' : index === activeAgentIndex ? 'active' : 'queued';
               const stageClass = stageState === 'active'
@@ -886,7 +886,7 @@ export default function App() {
             </div>
 
             {/* ROW 2: CHARTS & DEEP METRICS */}
-            <div className="col-span-12 lg:col-span-5 glass-panel p-4 h-64 lg:h-70 flex flex-col">
+            <div className="col-span-12 lg:col-span-5 glass-panel p-4 h-56 sm:h-64 lg:h-70 flex flex-col">
               <div className="flex justify-between items-center mb-2">
                 <div className="text-[10px] font-mono text-gray-400 tracking-widest uppercase">Exceedance Probability Curve</div>
                 <div className="text-[9px] font-mono bg-white/10 px-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Stochastic Model</div>
@@ -909,7 +909,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="col-span-12 lg:col-span-3 glass-panel p-4 h-64 lg:h-70 flex flex-col">
+            <div className="col-span-12 lg:col-span-3 glass-panel p-4 h-56 sm:h-64 lg:h-70 flex flex-col">
               <div className="text-[10px] font-mono text-gray-400 tracking-widest uppercase mb-1">Vulnerability Vectors</div>
               <div className="text-[9px] text-gray-500 mb-2 truncate">NDMA Index: <span className="text-white">{reportData.ndmaIndex}</span></div>
               <div className="flex-1 w-full min-h-0">
@@ -923,7 +923,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="col-span-12 lg:col-span-4 glass-panel p-4 h-64 lg:h-70 flex flex-col overflow-hidden">
+            <div className="col-span-12 lg:col-span-4 glass-panel p-4 h-56 sm:h-64 lg:h-70 flex flex-col overflow-hidden">
               <div className="text-[10px] uppercase font-mono tracking-widest text-gray-400 mb-3 flex items-center gap-2">
                 <Database className="w-3 h-3" /> Vector DB Analogs (Semantic Match)
               </div>
