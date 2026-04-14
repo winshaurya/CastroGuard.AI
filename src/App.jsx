@@ -252,6 +252,8 @@ export default function App() {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const canvasRef = useRef(null);
+  const polygonPointsRef = useRef([]);
+  const trailColorRef = useRef('#ffffff');
 
   const vectorNodeMap = new Map(vectorNodes.map(node => [node.id, node]));
   const isLightMode = theme === 'light';
@@ -262,6 +264,11 @@ export default function App() {
     : 'border-white/20 bg-black/70 text-white hover:bg-black/85';
 
   useEffect(() => {
+    polygonPointsRef.current = polygonPoints;
+    trailColorRef.current = isLightMode ? '#111111' : '#ffffff';
+  }, [polygonPoints, isLightMode]);
+
+  useEffect(() => {
     if (typeof document === 'undefined') return;
 
     document.documentElement.dataset.theme = theme;
@@ -269,6 +276,7 @@ export default function App() {
   }, [theme]);
 
   const clearPolygonSelection = () => {
+    polygonPointsRef.current = [];
     setPolygonPoints([]);
 
     const map = mapInstance.current;
@@ -276,9 +284,51 @@ export default function App() {
       map.polygonLayerGroup.clearLayers();
     }
 
+    if (map?.cursorTrailLayerGroup) {
+      map.cursorTrailLayerGroup.clearLayers();
+    }
+
+    if (map) {
+      map.currentTrailLatLng = null;
+    }
+
     if (map) {
       map.setView([19.0760, 72.8777], 11);
     }
+  };
+
+  const drawCursorTrail = (map, cursorLatLng) => {
+    if (!map?.cursorTrailLayerGroup) return;
+
+    map.cursorTrailLayerGroup.clearLayers();
+
+    const points = polygonPointsRef.current;
+    if (!cursorLatLng || points.length === 0 || points.length >= 4) return;
+
+    const anchor = points[points.length - 1];
+    const trailColor = trailColorRef.current;
+
+    L.polyline([
+      [Number(anchor.lat), Number(anchor.lng)],
+      [cursorLatLng.lat, cursorLatLng.lng],
+    ], {
+      color: trailColor,
+      weight: 2,
+      opacity: 0.85,
+      dashArray: '1 9',
+      lineCap: 'round',
+      lineJoin: 'round',
+      interactive: false,
+    }).addTo(map.cursorTrailLayerGroup);
+
+    L.circleMarker([cursorLatLng.lat, cursorLatLng.lng], {
+      radius: 4,
+      color: trailColor,
+      weight: 1,
+      fillColor: trailColor,
+      fillOpacity: 0.95,
+      interactive: false,
+    }).addTo(map.cursorTrailLayerGroup);
   };
 
   const handleLocateCurrentLocation = () => {
@@ -309,12 +359,34 @@ export default function App() {
 
     map.polygonLayerGroup = L.layerGroup().addTo(map);
     map.locationLayerGroup = L.layerGroup().addTo(map);
+    map.cursorTrailLayerGroup = L.layerGroup().addTo(map);
+    map.currentTrailLatLng = null;
 
     const handleMapClick = (e) => {
-      setPolygonPoints(prev => {
-        if (prev.length >= 4) return prev;
-        return [...prev, { lat: e.latlng.lat.toFixed(4), lng: e.latlng.lng.toFixed(4) }];
-      });
+      const currentPoints = polygonPointsRef.current;
+      if (currentPoints.length >= 4) return;
+
+      const nextPoints = [
+        ...currentPoints,
+        { lat: e.latlng.lat.toFixed(4), lng: e.latlng.lng.toFixed(4) },
+      ];
+
+      polygonPointsRef.current = nextPoints;
+      setPolygonPoints(nextPoints);
+
+      drawCursorTrail(map, map.currentTrailLatLng || e.latlng);
+    };
+
+    const handleMapMouseMove = (e) => {
+      map.currentTrailLatLng = e.latlng;
+      drawCursorTrail(map, e.latlng);
+    };
+
+    const handleMapMouseOut = () => {
+      map.currentTrailLatLng = null;
+      if (map.cursorTrailLayerGroup) {
+        map.cursorTrailLayerGroup.clearLayers();
+      }
     };
 
     const handleLocationFound = (event) => {
@@ -353,6 +425,8 @@ export default function App() {
     };
 
     map.on('click', handleMapClick);
+    map.on('mousemove', handleMapMouseMove);
+    map.on('mouseout', handleMapMouseOut);
     map.on('locationfound', handleLocationFound);
     map.on('locationerror', handleLocationError);
     window.addEventListener('resize', handleResize);
@@ -363,6 +437,8 @@ export default function App() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(resizeFrameId);
       map.off('click', handleMapClick);
+      map.off('mousemove', handleMapMouseMove);
+      map.off('mouseout', handleMapMouseOut);
       map.off('locationfound', handleLocationFound);
       map.off('locationerror', handleLocationError);
       map.remove();
@@ -401,6 +477,14 @@ export default function App() {
         }).addTo(map.polygonLayerGroup);
         const bounds = L.latLngBounds(latlngs);
         map.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+
+    if (map.cursorTrailLayerGroup) {
+      if (polygonPoints.length === 0 || polygonPoints.length >= 4) {
+        map.cursorTrailLayerGroup.clearLayers();
+      } else if (map.currentTrailLatLng) {
+        drawCursorTrail(map, map.currentTrailLatLng);
       }
     }
   }, [polygonPoints]);
@@ -673,6 +757,9 @@ export default function App() {
                 <label className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-bold">1. Geographic Boundary</label>
                 <span className="text-[9px] font-mono text-gray-500 bg-white/5 px-1">{polygonPoints.length}/4 Points</span>
               </div>
+              <div className="border border-white/10 bg-white/5 p-3 text-[10px] leading-relaxed text-gray-300">
+                Select 4 coordinates on the map. After the first click, a dotted guide follows your cursor until the square is complete or you clear it.
+              </div>
               <div className="p-3 bg-black border border-white/10 flex flex-col gap-1 min-h-20">
                 {polygonPoints.length === 0 ? (
                   <span className="font-mono text-xs opacity-40 pt-2 text-center">Awaiting polygon definition...</span>
@@ -685,7 +772,7 @@ export default function App() {
                   ))
                 )}
                 {polygonPoints.length > 0 && (
-                  <button onClick={() => setPolygonPoints([])} className="mt-1 text-[10px] text-gray-400 hover:text-white font-mono text-left w-max">
+                  <button onClick={clearPolygonSelection} className="mt-1 text-[10px] text-gray-400 hover:text-white font-mono text-left w-max">
                     [ CLEAR_BUFFER ]
                   </button>
                 )}
