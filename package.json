@@ -7,7 +7,7 @@
     "dev": "vite",
     "start": "vite preview --port 4173",
     "build": "vite build",
-    "vercel-build": "node vercel-build.js"
+    "vercel-build": "node vercel-build.cjs"
   },
   "keywords": [],
   "author": "",

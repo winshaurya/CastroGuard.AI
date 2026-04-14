@@ -1,4 +1,4 @@
-// vercel-build.js
+// vercel-build.cjs
 const { execSync } = require('child_process');
 
 try {
