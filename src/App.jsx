@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  ShieldAlert, ScanLine, Activity, FileText, ChevronRight,
+  Activity, FileText, ChevronRight,
   Map as MapIcon, Database, Server, Cpu, Layers, Maximize2, X,
   Mail, Loader2, ListChecks, TrendingUp, AlertTriangle, Clock, Zap,
-  Sun, Moon
+  Sun, Moon, LocateFixed
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -63,7 +63,8 @@ body {
   color: var(--app-fg);
   font-family: var(--font-cabinet);
   margin: 0;
-  overflow: hidden; /* Terminal feel, no body scrolling */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .font-display { font-family: var(--font-clash); }
@@ -154,6 +155,30 @@ body {
 :root[data-theme='light'] [class*="bg-black"] { background-color: rgba(255, 255, 255, 0.82) !important; }
 :root[data-theme='light'] [class*="bg-white/5"] { background-color: rgba(0, 0, 0, 0.03) !important; }
 :root[data-theme='light'] [class*="bg-white/10"] { background-color: rgba(0, 0, 0, 0.06) !important; }
+
+.dashboard-shell {
+  background: rgba(3, 3, 3, 0.92);
+}
+
+:root[data-theme='light'] .dashboard-shell {
+  background: rgba(244, 244, 241, 0.97);
+}
+
+.dashboard-shell .glass-panel {
+  background: rgba(12, 12, 12, 0.82);
+}
+
+.dashboard-shell .glass-panel-heavy {
+  background: rgba(12, 12, 12, 0.92);
+}
+
+:root[data-theme='light'] .dashboard-shell .glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+:root[data-theme='light'] .dashboard-shell .glass-panel-heavy {
+  background: rgba(255, 255, 255, 0.96);
+}
 `;
 
 const getGeminiApiKey = () => import.meta.env.VITE_GEMINI_API_KEY || (typeof window !== 'undefined' && window.apiKey ? window.apiKey : '') || '';
@@ -232,6 +257,9 @@ export default function App() {
   const isLightMode = theme === 'light';
   const shapeGridBorderColor = isLightMode ? 'rgba(0, 0, 0, 0.18)' : 'rgba(255, 255, 255, 0.18)';
   const shapeGridHoverFill = '#868484';
+  const mapControlClass = isLightMode
+    ? 'border-black/15 bg-white/85 text-black hover:bg-white'
+    : 'border-white/20 bg-black/70 text-white hover:bg-black/85';
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -239,6 +267,32 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('congni-theme', theme);
   }, [theme]);
+
+  const clearPolygonSelection = () => {
+    setPolygonPoints([]);
+
+    const map = mapInstance.current;
+    if (map?.polygonLayerGroup) {
+      map.polygonLayerGroup.clearLayers();
+    }
+
+    if (map) {
+      map.setView([19.0760, 72.8777], 11);
+    }
+  };
+
+  const handleLocateCurrentLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    const map = mapInstance.current;
+    if (!map) return;
+
+    map.locate({
+      setView: true,
+      maxZoom: 15,
+      enableHighAccuracy: true,
+    });
+  };
 
   // --- LEAFLET MAP INITIALIZATION ---
   useEffect(() => {
@@ -254,6 +308,7 @@ export default function App() {
     }).addTo(map);
 
     map.polygonLayerGroup = L.layerGroup().addTo(map);
+    map.locationLayerGroup = L.layerGroup().addTo(map);
 
     const handleMapClick = (e) => {
       setPolygonPoints(prev => {
@@ -262,11 +317,44 @@ export default function App() {
       });
     };
 
+    const handleLocationFound = (event) => {
+      if (!map.locationLayerGroup) return;
+
+      map.locationLayerGroup.clearLayers();
+
+      const currentTheme = document.documentElement?.dataset?.theme;
+      const locationColor = currentTheme === 'light' ? '#111111' : '#ffffff';
+
+      L.circle(event.latlng, {
+        radius: Math.max(event.accuracy / 2, 40),
+        color: locationColor,
+        weight: 1,
+        fillColor: locationColor,
+        fillOpacity: 0.08,
+      }).addTo(map.locationLayerGroup);
+
+      L.circleMarker(event.latlng, {
+        radius: 8,
+        color: locationColor,
+        weight: 2,
+        fillColor: locationColor,
+        fillOpacity: 0.9,
+      }).addTo(map.locationLayerGroup);
+    };
+
+    const handleLocationError = () => {
+      if (map.locationLayerGroup) {
+        map.locationLayerGroup.clearLayers();
+      }
+    };
+
     const handleResize = () => {
       map.invalidateSize();
     };
 
     map.on('click', handleMapClick);
+    map.on('locationfound', handleLocationFound);
+    map.on('locationerror', handleLocationError);
     window.addEventListener('resize', handleResize);
     mapInstance.current = map;
     const resizeFrameId = requestAnimationFrame(handleResize);
@@ -275,6 +363,8 @@ export default function App() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(resizeFrameId);
       map.off('click', handleMapClick);
+      map.off('locationfound', handleLocationFound);
+      map.off('locationerror', handleLocationError);
       map.remove();
       if (mapInstance.current === map) {
         mapInstance.current = null;
@@ -566,11 +656,10 @@ export default function App() {
   // --- VIEWS ---
   const renderInput = () => (
     <div className="flex flex-col lg:flex-row min-h-screen w-full relative">
-      <div className="w-full lg:w-1/3 p-4 sm:p-6 lg:p-8 flex flex-col justify-between z-10 glass-panel shadow-2xl relative overflow-y-auto border-r border-white/10">
+      <div className="w-full lg:w-1/3 p-4 sm:p-6 lg:p-8 flex flex-col justify-between z-10 glass-panel shadow-2xl relative border-r border-white/10">
         <div className="absolute inset-0 bg-black/60 -z-10"></div>
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-6 border-b border-white/10 pb-4">
-            <ScanLine className="w-6 h-6 text-white" />
             <BrandMark compact />
             <div className="ml-auto flex items-center gap-2 flex-wrap">
               <ThemeToggle theme={theme} onToggle={() => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))} />
@@ -650,6 +739,28 @@ export default function App() {
 
       <div className="w-full lg:w-2/3 h-[42vh] sm:h-[46vh] lg:min-h-screen relative bg-[#060606]">
         <div ref={mapRef} className="absolute inset-0 z-0"></div>
+        <div className="absolute bottom-3 right-3 z-20 flex flex-col items-end gap-2 pointer-events-auto">
+          <button
+            type="button"
+            onClick={handleLocateCurrentLocation}
+            className={`flex h-10 w-10 items-center justify-center border transition-colors ${mapControlClass}`}
+            title="Go to current location"
+            aria-label="Go to current location"
+          >
+            <LocateFixed className="h-4 w-4" />
+          </button>
+          {polygonPoints.length === 4 && (
+            <button
+              type="button"
+              onClick={clearPolygonSelection}
+              className={`border px-3 py-2 text-[9px] font-mono uppercase tracking-[0.24em] transition-colors ${mapControlClass}`}
+              title="Clear selection"
+              aria-label="Clear selection"
+            >
+              Clear
+            </button>
+          )}
+        </div>
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10 mix-blend-difference opacity-50">
           <div className="w-100 h-100 border border-white/20 rounded-full flex items-center justify-center border-dashed">
             <div className="w-1 h-1 bg-white shadow-[0_0_10px_#fff]"></div>
@@ -666,10 +777,10 @@ export default function App() {
   );
 
   const renderProcessing = () => (
-    <div className="flex flex-col lg:flex-row min-h-screen w-full relative bg-black overflow-hidden font-mono text-white">
-      <canvas ref={canvasRef} className="absolute inset-0 z-0 opacity-25"></canvas>
+    <div className="flex flex-col lg:flex-row min-h-screen w-full relative bg-transparent overflow-visible font-mono text-white">
+      <canvas ref={canvasRef} className="fixed inset-0 z-0 opacity-25 pointer-events-none"></canvas>
 
-      <div className="absolute inset-0 z-1 pointer-events-none">
+      <div className="fixed inset-0 z-[1] pointer-events-none">
         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
           {vectorLinks.map((link, index) => {
             const from = vectorNodeMap.get(link.from);
@@ -811,13 +922,12 @@ export default function App() {
     const isDenied = reportData.verdict === 'DENIED';
 
     return (
-      <div className="min-h-screen w-full bg-[#030303] relative page-enter-right flex flex-col overflow-hidden">
+      <div className="dashboard-shell min-h-screen w-full relative page-enter-right flex flex-col overflow-visible">
         <div className="scanline"></div>
 
         {/* ULTRA-COMPACT HEADER */}
-        <header className="flex flex-col gap-3 p-3 bg-black border-b border-white/10 z-20 shrink-0 sm:flex-row sm:items-center sm:justify-between">
+        <header className="sticky top-0 flex flex-col gap-3 p-3 bg-black/65 backdrop-blur-xl border-b border-white/10 z-20 shrink-0 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4 min-w-0">
-            <div className="bg-white text-black p-1.5"><ShieldAlert className="w-5 h-5" /></div>
             <div className="min-w-0">
               <BrandMark compact />
               <div className="text-[9px] font-mono tracking-[0.3em] text-gray-500 uppercase leading-none mt-1">NEURO AI: UNDERWRITING COMMAND CENTER</div>
@@ -835,8 +945,8 @@ export default function App() {
         </header>
 
         {/* DENSE GRID LAYOUT - NO EMPTY SPACE */}
-        <div className="flex-1 overflow-y-auto p-1.5 sm:p-2 scroll-smooth">
-          <div className="grid grid-cols-12 gap-1.5 sm:gap-2 h-full auto-rows-min">
+        <div className="px-1.5 sm:px-2 pb-6 pt-1.5 scroll-smooth">
+          <div className="grid grid-cols-12 gap-1.5 sm:gap-2 auto-rows-min">
 
             {/* ROW 1: CORE VERDICT & FINANCIALS */}
             <div className={`col-span-12 lg:col-span-3 glass-panel p-4 flex flex-col justify-center border-l-4 ${isApproved ? 'border-l-white/80' : isDenied ? 'border-l-white/40' : 'border-l-white/20'}`}>
@@ -924,8 +1034,8 @@ export default function App() {
             </div>
 
             <div className="col-span-12 lg:col-span-4 glass-panel p-4 h-56 sm:h-64 lg:h-70 flex flex-col overflow-hidden">
-              <div className="text-[10px] uppercase font-mono tracking-widest text-gray-400 mb-3 flex items-center gap-2">
-                <Database className="w-3 h-3" /> Vector DB Analogs (Semantic Match)
+              <div className="text-[10px] uppercase font-mono tracking-widest text-gray-300 mb-2 flex items-center gap-2">
+                <FileText className="w-3 h-3" /> Insurer Brief
               </div>
               <div className="flex-1 overflow-y-auto pr-1 space-y-1">
                 {reportData.analogEvents?.map((event, i) => (
@@ -1009,7 +1119,7 @@ export default function App() {
 
             <div className="col-span-12 lg:col-span-4 glass-panel p-4 flex flex-col">
               <div className="text-[10px] uppercase font-mono tracking-widest text-gray-400 mb-2 flex items-center gap-2">
-                <ShieldAlert className="w-3 h-3" /> Insurer Brief
+                <FileText className="w-3 h-3" /> Insurer Brief
               </div>
               <p className="text-sm text-white leading-snug mb-3">{reportData.insurerBrief || reportData.reasoning}</p>
               <div className="bg-white/5 border border-white/10 p-3 text-[9px] font-mono text-gray-300 leading-relaxed">
@@ -1057,7 +1167,7 @@ export default function App() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
-      <div className="relative min-h-screen w-full overflow-hidden text-(--app-fg) selection:bg-white/30 selection:text-white">
+      <div className="relative isolate min-h-screen w-full overflow-x-hidden text-(--app-fg) selection:bg-white/30 selection:text-white">
         <ShapeGrid
           theme={theme}
           direction="diagonal"
@@ -1067,9 +1177,9 @@ export default function App() {
           hoverFillColor={shapeGridHoverFill}
           shape="hexagon"
           hoverTrailAmount={0}
-          className="pointer-events-none absolute inset-0 opacity-20 sm:opacity-30"
+          className="pointer-events-none fixed inset-0 z-0 opacity-20 sm:opacity-30"
         />
-        <div className="absolute inset-0 bg-linear-to-b from-black/5 via-transparent to-black/20 pointer-events-none"></div>
+        <div className="absolute inset-0 z-0 bg-linear-to-b from-black/5 via-transparent to-black/20 pointer-events-none"></div>
         <div className="relative z-10">
           {view === 'input' && renderInput()}
           {view === 'processing' && renderProcessing()}
